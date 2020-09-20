@@ -1,0 +1,6 @@
+**/build
+.idea
+.settings
+.project
+Dockerfile
+docker-compose.yml
