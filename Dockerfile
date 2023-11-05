@@ -1,9 +1,9 @@
-FROM gradle:6.2.0-jdk8 as build
+FROM --platform=linux/amd64 maven:3.9.4-eclipse-temurin-17-alpine as build
 
 WORKDIR /build
 COPY ./extension .
-RUN gradle jar
+RUN mvn package
 
-FROM jboss/keycloak:12.0.4
-COPY --from=build /build/build/libs/user-migration-0.1.0.jar /opt/jboss/keycloak/standalone/deployments/user-migration.jar
-COPY ./theme /opt/jboss/keycloak/themes/teessidehackspace/
+FROM quay.io/keycloak/keycloak:22.0.5
+COPY --from=build /build/target/uk.org.teessidehackspace-user-migration.jar /opt/keycloak/providers/user-migration.jar
+COPY ./theme /opt/keycloak/themes/teessidehackspace/

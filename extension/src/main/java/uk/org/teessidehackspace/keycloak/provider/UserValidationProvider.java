@@ -1,9 +1,8 @@
 package uk.org.teessidehackspace.keycloak.provider;
 
+import jakarta.ws.rs.core.MultivaluedMap;
 import java.util.ArrayList;
 import java.util.List;
-import javax.ws.rs.core.MultivaluedMap;
-import org.jboss.logging.Logger;
 import org.keycloak.Config;
 import org.keycloak.authentication.FormAction;
 import org.keycloak.authentication.FormActionFactory;
@@ -19,15 +18,12 @@ import org.keycloak.models.utils.FormMessage;
 import org.keycloak.protocol.oidc.OIDCLoginProtocol;
 import org.keycloak.provider.ProviderConfigProperty;
 import org.keycloak.services.messages.Messages;
-import org.keycloak.services.resources.AttributeFormDataProcessor;
 import org.keycloak.services.validation.Validation;
-import org.keycloak.userprofile.profile.representations.AttributeUserProfile;
-import org.keycloak.userprofile.utils.UserUpdateHelper;
+
+
 
 
 public class UserValidationProvider implements FormAction, FormActionFactory {
-
-    private static final Logger logger = Logger.getLogger(UserValidationProvider.class);
 
     public static final String PROVIDER_ID = "registration-user-creation-custom";
 
@@ -67,7 +63,7 @@ public class UserValidationProvider implements FormAction, FormActionFactory {
                 context.validationError(formData, errors);
                 return;
             }
-            if (email != null && !context.getRealm().isDuplicateEmailsAllowed() && context.getSession().users().getUserByEmail(email, context.getRealm()) != null) {
+            if (email != null && !context.getRealm().isDuplicateEmailsAllowed() && context.getSession().users().getUserByEmail( context.getRealm(), email) != null) {
                 context.error(Errors.EMAIL_IN_USE);
                 formData.remove(Validation.FIELD_EMAIL);
                 errors.add(new FormMessage(RegistrationPage.FIELD_EMAIL, Messages.EMAIL_EXISTS));
@@ -82,7 +78,8 @@ public class UserValidationProvider implements FormAction, FormActionFactory {
                 return;
             }
 
-            if (context.getSession().users().getUserByUsername(username, context.getRealm()) != null) {
+            UserModel existingUser = context.getSession().users().getUserByUsername( context.getRealm(), username);
+            if (existingUser != null) {
                 context.error(Errors.USERNAME_IN_USE);
                 errors.add(new FormMessage(usernameField, Messages.USERNAME_EXISTS));
                 formData.remove(Validation.FIELD_USERNAME);
@@ -90,16 +87,13 @@ public class UserValidationProvider implements FormAction, FormActionFactory {
                 return;
             }
 
-            logger.info("Checking username is valid");
             if(!username.matches("[A-Za-z0-9_-]+")) {
                 context.error(Errors.INVALID_REGISTRATION);
                 errors.add(new FormMessage(RegistrationPage.FIELD_USERNAME, Messages.INVALID_USERNAME));
                 formData.remove(Validation.FIELD_USERNAME);
                 context.validationError(formData, errors);
-                logger.info("Username is invalid, fail");
                 return;
             }
-            logger.info("username is valid");
 
         }
         context.success();
@@ -127,8 +121,7 @@ public class UserValidationProvider implements FormAction, FormActionFactory {
 
         user.setEmail(email);
         context.getAuthenticationSession().setClientNote(OIDCLoginProtocol.LOGIN_HINT_PARAM, username);
-        AttributeUserProfile updatedProfile = AttributeFormDataProcessor.process(formData);
-        UserUpdateHelper.updateRegistrationProfile(context.getRealm(), user, updatedProfile);
+        user.setAttribute("nickName", formData.get("nickName"));
 
         context.setUser(user);
         context.getEvent().user(user);

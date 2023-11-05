@@ -2,13 +2,10 @@ package uk.org.teessidehackspace.keycloak.provider;
 
 import org.jboss.logging.Logger;
 import com.auth0.client.auth.AuthAPI;
-import com.auth0.client.mgmt.ManagementAPI;
-import com.auth0.client.mgmt.filter.FieldsFilter;
 import com.auth0.exception.APIException;
 import com.auth0.exception.Auth0Exception;
-import com.auth0.json.auth.TokenHolder;
-import com.auth0.json.mgmt.users.User;
-import com.auth0.net.AuthRequest;
+import com.auth0.net.TokenRequest;
+
 import org.keycloak.component.ComponentModel;
 import org.keycloak.credential.CredentialInput;
 import org.keycloak.credential.CredentialInputValidator;
@@ -22,7 +19,6 @@ import org.keycloak.storage.UserStorageProvider;
 import org.keycloak.storage.user.UserLookupProvider;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class Auth0UserStorageProvider implements UserStorageProvider, CredentialInputValidator, UserLookupProvider {
@@ -31,11 +27,9 @@ public class Auth0UserStorageProvider implements UserStorageProvider, Credential
 
     protected Map<String, UserModel> loadedUsers = new HashMap<>();
 
-    private final KeycloakSession session;
     private final ComponentModel model;
 
     public Auth0UserStorageProvider(KeycloakSession session, ComponentModel model) {
-        this.session = session;
         this.model = model;
     }
 
@@ -57,13 +51,15 @@ public class Auth0UserStorageProvider implements UserStorageProvider, Credential
     }
 
     public boolean validPassword(RealmModel realm, UserModel user, String password) {
-        AuthAPI api = new AuthAPI(model.get("auth0_domain"), model.get("auth0_client_id"), model.get("auth0_client_secret"));
-        AuthRequest request = api.login(user.getUsername(), password)
+        AuthAPI api = AuthAPI.newBuilder(model.get("auth0_domain"), model.get("auth0_client_id"), model.get("auth0_client_secret"))
+                .build();
+        
+        TokenRequest request = api.login(user.getUsername(), password.toCharArray())
                 .setAudience("https://"+model.get("auth0_domain")+"/api/v2/")
                 .setScope("openid");
         try {
-            TokenHolder holder = request.execute();
-            session.userCredentialManager().updateCredential(realm, user, UserCredentialModel.password(password));
+            request.execute();
+            user.credentialManager().updateCredential(UserCredentialModel.password(password));
             user.addRequiredAction(UpdateProfileWithUsernameValidation.PROVIDER_ID);
             user.setFederationLink(null);
             return true;
@@ -78,51 +74,20 @@ public class Auth0UserStorageProvider implements UserStorageProvider, Credential
     public void close() {
     }
 
-    public UserModel getUserById(String id, RealmModel realm) {
+    @Override
+    public UserModel getUserById(RealmModel realm, String id) {
         StorageId storageId = new StorageId(id);
         String username = storageId.getExternalId();
-        return getUserByUsername(username, realm);
+        return getUserByUsername(realm, username);
     }
 
-    public UserModel getUserByUsername(String username, RealmModel realm) {
-        UserModel adapter = loadedUsers.get(username);
-        if (adapter == null) {
-            AuthAPI api = new AuthAPI(model.get("auth0_domain"), model.get("auth0_client_id"), model.get("auth0_client_secret"));
-            AuthRequest request = api.requestToken("https://"+model.get("auth0_domain")+"/api/v2/");
-
-            List<User> listRequest = null;
-            try {
-                TokenHolder holder = request.execute();
-
-                ManagementAPI mgmt = new ManagementAPI(model.get("auth0_domain"), holder.getAccessToken());
-                listRequest = mgmt.users().listByEmail(username, new FieldsFilter()).execute();
-
-                if (listRequest.size() > 0) {
-                    User user = listRequest.get(0);
-                    adapter = createAdapter(realm, username);
-                    loadedUsers.put(username, adapter);
-                }
-            } catch (Auth0Exception e) {
-                logger.error(e);
-            }
-        }
-        return adapter;
+    @Override
+    public UserModel getUserByUsername(RealmModel realm, String username) {
+        return loadedUsers.get(username);
     }
 
-
-    protected UserModel createAdapter(RealmModel realm, String username) {
-        UserModel local = session.userLocalStorage().getUserByUsername(username, realm);
-        if (local == null) {
-            local = session.userLocalStorage().addUser(realm, username);
-            local.setEmail(username);
-            local.setEnabled(true);
-            local.setEmailVerified(true);
-            local.setFederationLink(model.getId());
-        }
-        return local;
-    }
-
-    public UserModel getUserByEmail(String email, RealmModel realm) {
-        return getUserByUsername(email, realm);
+    @Override
+    public UserModel getUserByEmail(RealmModel realm, String email) {
+        return getUserByUsername(realm, email);
     }
 }

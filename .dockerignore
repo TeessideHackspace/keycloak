@@ -4,3 +4,6 @@
 .project
 Dockerfile
 docker-compose.yml
+extension/target
+extension/bin
+.vscode

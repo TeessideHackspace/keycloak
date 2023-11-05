@@ -1,9 +1,7 @@
 package uk.org.teessidehackspace.keycloak.provider;
 
 import org.keycloak.Config;
-import org.keycloak.OAuth2Constants;
 import org.keycloak.authentication.*;
-import org.keycloak.authentication.requiredactions.ConsoleUpdateProfile;
 import org.keycloak.events.Details;
 import org.keycloak.events.EventBuilder;
 import org.keycloak.events.EventType;
@@ -13,22 +11,23 @@ import org.keycloak.models.RealmModel;
 import org.keycloak.models.UserModel;
 import org.keycloak.models.utils.FormMessage;
 import org.keycloak.services.messages.Messages;
-import org.keycloak.services.resources.AttributeFormDataProcessor;
 import org.keycloak.services.validation.Validation;
-import org.keycloak.userprofile.profile.representations.AttributeUserProfile;
-import org.keycloak.userprofile.utils.UserUpdateHelper;
 
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+
+import java.util.ArrayList;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static org.keycloak.services.validation.Validation.FIELD_USERNAME;
 
-public class UpdateProfileWithUsernameValidation implements RequiredActionProvider, RequiredActionFactory, DisplayTypeRequiredActionFactory {
+public class UpdateProfileWithUsernameValidation implements RequiredActionProvider, RequiredActionFactory {
 
     public static final String PROVIDER_ID = "update-profile-validate-username";
+
+    public static final String FIELD_LAST_NAME = "lastName";
+    public static final String FIELD_FIRST_NAME = "firstName";
+    public static final String FIELD_EMAIL = "email";
 
     @Override
     public void evaluateTriggers(RequiredActionContext context) {
@@ -41,6 +40,14 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
         context.challenge(challenge);
     }
 
+    private static void addError(List<FormMessage> errors, String field, String message){
+        errors.add(new FormMessage(field, message));
+    }
+
+    public static boolean isBlank(String s) {
+        return s == null || s.trim().length() == 0;
+    }
+
     @Override
     public void processAction(RequiredActionContext context) {
         EventBuilder event = context.getEvent();
@@ -50,12 +57,27 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
         KeycloakSession session = context.getSession();
         RealmModel realm = context.getRealm();
 
-        List<FormMessage> errors = Validation.validateUpdateProfileForm(realm, formData);
-
-        if(!formData.getFirst(FIELD_USERNAME).matches("[A-Za-z0-9_-]+")) {
-            errors.add(new FormMessage(FIELD_USERNAME, Messages.INVALID_USERNAME));
+        List<FormMessage> errors = new ArrayList<>();
+        
+        if (isBlank(formData.getFirst(FIELD_USERNAME))) {
+            addError(errors, FIELD_USERNAME, Messages.MISSING_USERNAME);
+        } else if(!formData.getFirst(FIELD_USERNAME).matches("[A-Za-z0-9_-]+")) {
+            addError(errors, FIELD_USERNAME, Messages.INVALID_USERNAME);
         }
 
+        if (isBlank(formData.getFirst(FIELD_FIRST_NAME))) {
+            addError(errors, FIELD_FIRST_NAME, Messages.MISSING_FIRST_NAME);
+        }
+
+        if (isBlank(formData.getFirst(FIELD_LAST_NAME))) {
+            addError(errors, FIELD_LAST_NAME, Messages.MISSING_LAST_NAME);
+        }
+
+        if (isBlank(formData.getFirst(FIELD_EMAIL))) {
+            addError(errors, FIELD_EMAIL, Messages.MISSING_EMAIL);
+        } else if (!Validation.isEmailValid(formData.getFirst(FIELD_EMAIL))) {
+            addError(errors, FIELD_EMAIL, Messages.INVALID_EMAIL);
+        }
         if (errors != null && !errors.isEmpty()) {
             Response challenge = context.form()
                     .setErrors(errors)
@@ -64,7 +86,7 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
             context.challenge(challenge);
             return;
         }
-
+        
         if (realm.isEditUsernameAllowed()) {
             String username = formData.getFirst("username");
             String oldUsername = user.getUsername();
@@ -72,8 +94,7 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
             boolean usernameChanged = oldUsername != null ? !oldUsername.equals(username) : username != null;
 
             if (usernameChanged) {
-
-                if (session.users().getUserByUsername(username, realm) != null) {
+                if (session.users().getUserByUsername(realm, username) != null) {
                     Response challenge = context.form()
                             .setError(Messages.USERNAME_EXISTS)
                             .setFormData(formData)
@@ -84,7 +105,6 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
 
                 user.setUsername(username);
             }
-
         }
 
         user.setFirstName(formData.getFirst("firstName"));
@@ -97,7 +117,7 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
 
         if (emailChanged) {
             if (!realm.isDuplicateEmailsAllowed()) {
-                UserModel userByEmail = session.users().getUserByEmail(email, realm);
+                UserModel userByEmail = session.users().getUserByEmail(realm, email);
 
                 // check for duplicated email
                 if (userByEmail != null && !userByEmail.getId().equals(user.getId())) {
@@ -114,14 +134,12 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
             user.setEmailVerified(false);
         }
 
-        AttributeUserProfile updatedProfile = AttributeFormDataProcessor.process(formData);
-        UserUpdateHelper.updateUserProfile(context.getRealm(), user, updatedProfile);
+        user.setAttribute("nickName", formData.get("user.attributes.nickName"));
 
         if (emailChanged) {
             event.clone().event(EventType.UPDATE_EMAIL).detail(Details.PREVIOUS_EMAIL, oldEmail).detail(Details.UPDATED_EMAIL, email).success();
         }
         context.success();
-
     }
 
 
@@ -134,15 +152,6 @@ public class UpdateProfileWithUsernameValidation implements RequiredActionProvid
     public RequiredActionProvider create(KeycloakSession session) {
         return this;
     }
-
-
-    @Override
-    public RequiredActionProvider createDisplay(KeycloakSession session, String displayType) {
-        if (displayType == null) return this;
-        if (!OAuth2Constants.DISPLAY_CONSOLE.equalsIgnoreCase(displayType)) return null;
-        return ConsoleUpdateProfile.SINGLETON;
-    }
-
 
 
     @Override

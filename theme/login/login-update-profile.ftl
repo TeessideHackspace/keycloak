@@ -37,7 +37,7 @@
 
             <div class="${properties.kcFormGroupClass!} ${messagesPerField.printIfExists('nickName',properties.kcFormGroupErrorClass!)}">
                 <div class="${properties.kcLabelWrapperClass!}">
-                    <label for="user.attributes.nickName" class="${properties.kcLabelClass!}">Nickname (optional)</label>
+                    <label for="user.attributes.nickName" class="${properties.kcLabelClass!}">Preferred Name (optional)</label>
                     <p class="registration-help">The name that you want people to call you, e.g. John</p>
                 </div>
                 <div class="${properties.kcInputWrapperClass!}">
