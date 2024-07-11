@@ -4,6 +4,6 @@ WORKDIR /build
 COPY ./extension .
 RUN mvn package
 
-FROM quay.io/keycloak/keycloak:22.0.5
+FROM quay.io/keycloak/keycloak:25.0.1
 COPY --from=build /build/target/uk.org.teessidehackspace-user-migration.jar /opt/keycloak/providers/user-migration.jar
 COPY ./theme /opt/keycloak/themes/teessidehackspace/

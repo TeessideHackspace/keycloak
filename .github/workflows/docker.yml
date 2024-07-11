@@ -1,6 +1,9 @@
 name: Docker registry
 
-on: [push]
+on:
+  push:
+    tags:
+      - "*"
 
 jobs:
   github:
@@ -21,6 +24,6 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          tags: teessidehackspace/keycloak:latest
+          tags: teessidehackspace/keycloak:${{  github.ref_name }}
       - name: Image digest
         run: echo ${{ steps.docker_build.outputs.digest }}
