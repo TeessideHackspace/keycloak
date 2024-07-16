@@ -1,5 +1,5 @@
 <#import "template.ftl" as layout>
-<@layout.registrationLayout displayInfo=social.displayInfo; section>
+<@layout.registrationLayout displayInfo=realm.password && realm.registrationAllowed && !registrationDisabled??; section>
     <#if section = "title">
         ${msg("loginTitle",(realm.displayName!''))}
     <#elseif section = "header">
@@ -62,10 +62,12 @@
             </form>
         </#if>
     <#elseif section = "info" >
-        <div id="kc-registration">
-            <h2 class="heading-medium">${msg("noAccount")}</h2>
-            <p><a href="${url.registrationUrl}">${msg("registerLink")}</a></p>
-        </div>
+        <#if realm.password && realm.registrationAllowed && !registrationDisabled??>
+            <div id="kc-registration">
+                <h2 class="heading-medium">${msg("noAccount")}</h2>
+                <p><a href="${url.registrationUrl}">${msg("registerLink")}</a></p>
+            </div>
+        </#if>
 
         <#if realm.password && social.providers??>
             <#-- This section of the theme has not yet been well styled. Non-trivial user research, interaction design and content design work is required to develop a solution for login using 3rd-party identity providers. -->
